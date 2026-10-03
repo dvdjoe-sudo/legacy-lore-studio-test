@@ -469,12 +469,17 @@ export function meaningfulPositions(c) {
     .map((p) => [p, Number(games[p]) || 0])
     .filter(([, n]) => n > 0);
   if (!field.length) return all;
-  const total = field.reduce((n, [, g]) => n + g, 0),
-    // v0.4: 25%-or-100-games eligibility. A position counts with 100+ games
-    // or with 50+ games making up at least a quarter of the player's field
-    // work; tiny cameos never count as meaningful experience.
+  const teamGames = Number(c.profile?.advancedStats?.G) || 0,
+    fieldTotal = field.reduce((n, [, g]) => n + g, 0),
+    // DH rule 6 (current): a player can only take a field spot at a position
+    // with 25%+ of his own team games, or at his most-played spot. A 50-game
+    // floor keeps tiny cameos from counting. The most-played fallback
+    // guarantees every player is eligible somewhere. When team games are
+    // missing, fall back to share of field work.
+    mostPlayed = field.reduce((best, [p, g]) => (g > (best[1] || 0) ? [p, g] : best), [null, 0])[0],
+    denominator = teamGames > 0 ? teamGames : fieldTotal,
     meaningful = field
-      .filter(([, g]) => g >= 100 || (g >= 50 && g / total >= 0.25))
+      .filter(([p, g]) => g >= 50 && (p === mostPlayed || (denominator > 0 && g / denominator >= 0.25)))
       .map(([p]) => p);
   return [...new Set([...all.filter((p) => p === "SP" || p === "RP"), ...meaningful])];
 }
@@ -517,13 +522,20 @@ const trueDH = (c) =>
         .reduce((sum, value) => sum + value, 0);
     return dh >= 300 && dh >= field * 0.5;
   })();
-const powerScore = (c) =>
-  (statNumber(c, "HR") || 0) * 4 +
-  Math.max(0, (statNumber(c, "OPSPlus") || 100) - 100) *
-    Math.sqrt(Math.max(1, statNumber(c, "PA") || 1)) *
-    0.1 +
-  Math.max(0, statNumber(c, "runsBat") || 0) * 0.5 +
-  (statNumber(c, "APEX_F") ?? statNumber(c, "APEX_R") ?? 0) * 2;
+const powerScore = (c) => {
+  // DH rule 2 (current): scored on run production only. OPS+ above average
+  // with a playing-time/longevity credit (sqrt PA), power (HR), and batting
+  // runs. No baserunning, no glove. The old APEX_F term is removed: the
+  // H-lane APEX can include baserunning, which Rule 2 excludes, and its
+  // hitting signal is already captured by OPS+ and runsBat.
+  const opsPlus = statNumber(c, "OPSPlus") || 100,
+    pa = Math.max(1, statNumber(c, "PA") || 1);
+  return (
+    (statNumber(c, "HR") || 0) * 4 +
+    Math.max(0, opsPlus - 100) * Math.sqrt(pa) * 0.1 +
+    Math.max(0, statNumber(c, "runsBat") || 0) * 0.5
+  );
+};
 
 const starterSlotKeys = () => SLOTS.slice(0, 9).map(([slot]) => slot);
 const lineupScores = (c) => {
@@ -866,6 +878,58 @@ export function addAutomaticRoleFitExplanations(roster, candidates) {
   return r;
 }
 
+// DH rule 5 (current): DH glove rule. After the nine are set, compare the DH
+// with the top 2-3 starters he could replace in the field. If the DH has the
+// better glove by 1+ run per 150 games, he plays the field and the other guy
+// DHs. Uses career runsDefense per 150 games as the glove rate.
+// Data guardrail: the DH must have played at least half his field games at
+// the compared position, so the career rate is a fair proxy for his glove
+// there. (Per-position defensive data lives in the data pipeline; until it
+// lands, this keeps the rule from misfiring on blended utility rates.)
+function applyDHGloveRule(roster, players) {
+  const byId = new Map(players.map((c) => [c.id, c])),
+    dhId = roster.slots?.DH,
+    dh = dhId ? byId.get(dhId) : null;
+  if (!dh) return;
+  const gloveRate = (c) => {
+      const a = c.profile?.advancedStats || {},
+        runs = Number(a.runsDefense),
+        g = Number(a.G);
+      if (!Number.isFinite(runs) || !Number.isFinite(g) || g <= 0) return null;
+      return (runs / g) * 150;
+    },
+    dhRate = gloveRate(dh);
+  if (dhRate == null) return;
+  const fieldPositions = ["C", "1B", "2B", "3B", "SS", "LF", "CF", "RF"],
+    dhGames = dh.profile?.advancedStats?.positionGames || {},
+    dhFieldTotal = fieldPositions.reduce((n, p) => n + (Number(dhGames[p]) || 0), 0),
+    // Top 3 eligible field positions by games played, requiring at least
+    // half the DH's field work came at the position.
+    candidates = fieldPositions
+      .filter((pos) => meaningfulPositions(dh).includes(pos))
+      .map((pos) => ({ pos, games: Number(dhGames[pos]) || 0 }))
+      .filter(({ games }) => dhFieldTotal > 0 && games / dhFieldTotal >= 0.5)
+      .sort((a, b) => b.games - a.games)
+      .slice(0, 3);
+  let bestSwap = null;
+  for (const { pos } of candidates) {
+    const starterId = roster.slots?.[pos],
+      starter = starterId ? byId.get(starterId) : null;
+    if (!starter || starter.id === dh.id) continue;
+    const starterRate = gloveRate(starter);
+    if (starterRate == null) continue;
+    const advantage = dhRate - starterRate;
+    if (advantage >= 1 && (!bestSwap || advantage > bestSwap.advantage)) {
+      bestSwap = { pos, starter, advantage };
+    }
+  }
+  if (bestSwap) {
+    // DH takes the field; the displaced starter becomes the DH.
+    roster.slots[bestSwap.pos] = dh.id;
+    roster.slots.DH = bestSwap.starter.id;
+  }
+}
+
 export function draftRoster(candidates, existing, allCandidates = candidates, strategy = existing?.strategy || "balanced") {
   const r = cleanRoster(existing, allCandidates),
     used = new Set(Object.values(r.slots)),
@@ -909,12 +973,35 @@ export function draftRoster(candidates, existing, allCandidates = candidates, st
     );
     take(slot, (c) => played(c, slot));
   }
-  take("DH", (c) => trueDH(c));
-  take(
-    "DH",
-    () => true,
-    (a, b) => powerScore(b) - powerScore(a),
-  );
+  // DH rule 1+2 (current): anyone can DH, no DH games required, no penalty
+  // for never playing DH. The DH goes to the best hitter by run production
+  // (powerScore: OPS+, power, batting runs, longevity). The old true-DH
+  // preference is removed; true-DH data is used for the DH comparison only.
+  // DH rule 8 (current): flag a Close Call when the top two DH candidates
+  // are very close (within 5% on the hitting-only score).
+  {
+    const dhPool = players
+      .filter((c) => c.type === "Player" && !isPitcher(c) && !used.has(c.id))
+      .map((c) => ({ c, score: powerScore(c) }))
+      .sort((a, b) => b.score - a.score);
+    if (dhPool[0]) {
+      r.slots.DH = dhPool[0].c.id;
+      used.add(dhPool[0].c.id);
+    }
+    if (dhPool.length >= 2 && dhPool[0].score > 0) {
+      const gap = (dhPool[0].score - dhPool[1].score) / dhPool[0].score;
+      if (gap < 0.05) {
+        r.overrides = r.overrides || {};
+        const note = `Close call at DH: ${dhPool[0].c.name} edged ${dhPool[1].c.name} by ${(gap * 100).toFixed(1)}% on the hitting-only score.`;
+        r.overrides.DH = r.overrides.DH ? `${r.overrides.DH} ${note}` : note;
+      }
+    }
+  }
+  // DH rule 5 (current): DH glove rule. After the nine are set, compare the
+  // DH with the top 2-3 starters he could replace in the field. If the DH
+  // has the better glove by 1+ run per 150 games, he plays the field and the
+  // other guy DHs. (This is why DiMaggio plays CF and Mantle DHs.)
+  applyDHGloveRule(r, players);
   for (let i = 1; i <= 5; i++)
     take("SP" + i, (c) => meaningfulPositions(c).includes("SP"));
   // v0.4: 2 lefty / 2 righty rotation. Applied in the balanced strategy as a

@@ -83,13 +83,17 @@ function positionWork(candidate) {
     rows = FIELD_POSITIONS.map((position) => [position, Math.max(0, finite(games[position]) || 0)])
       .filter(([, value]) => value > 0)
       .sort((a, b) => b[1] - a[1]),
-    total = rows.reduce((sum, [, value]) => sum + value, 0),
-    high = rows[0]?.[1] || 0,
-    // v0.4: 25%-or-100-games eligibility, same rule as roster eligibility.
+    teamGames = Number(advanced(candidate)?.G) || 0,
+    fieldTotal = rows.reduce((sum, [, value]) => sum + value, 0),
+    mostPlayed = rows[0]?.[0] || null,
+    denominator = teamGames > 0 ? teamGames : fieldTotal,
+    // DH rule 6 (current): 25%+ of team games, or the most-played spot,
+    // with a 50-game floor so cameos never count. Falls back to share of
+    // field work when team games are missing.
     meaningful = rows.filter(
-      ([, value]) => value >= 100 || (value >= 50 && value / Math.max(1, total) >= 0.25),
+      ([position, value]) => value >= 50 && (position === mostPlayed || (denominator > 0 && value / denominator >= 0.25)),
     );
-  return { rows, meaningful, total, high };
+  return { rows, meaningful, total: fieldTotal, high: rows[0]?.[1] || 0 };
 }
 
 export function versatilityCompanion(candidate) {
