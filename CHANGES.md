@@ -1,9 +1,42 @@
 # Legacy Lore Studio — changes by Cooper (2026-10-03)
 
 Work done on the source exported from the ChatGPT dev chat on 2026-10-03.
-All 130 automated tests pass (`node --test tests/*.test.mjs`).
+All 134 automated tests pass (`node --test tests/*.test.mjs`).
 Verified end to end in a real browser (Mets Clubhouse auto-draft) and across
 all 30 franchises (every auto-draft completes 26/26 with zero errors).
+
+## DH rules (current, from Joe 2026-10-03)
+
+Implemented the current DH rulebook:
+
+1. **Rule 1+2 — DH goes to the best hitter, no DH-experience preference**
+   (`public/legends.js` `draftRoster`). Removed the true-DH first pick. The DH
+   is now chosen purely by run production (powerScore: OPS+, power, batting
+   runs, longevity credit). No penalty for never playing DH, no bonus for
+   having DH'd. True-DH data is still used for the DH comparison display.
+
+2. **Rule 5 — DH glove rule** (`public/legends.js` `applyDHGloveRule`). After
+   the nine are set, the DH is compared with the top 3 starters he could
+   replace in the field. If the DH has the better glove by 1+ run per 150
+   games (career runsDefense rate), he plays the field and the other guy DHs.
+   This produces the rulebook's signature outcome: DiMaggio in CF, Mantle at
+   DH for the Yankees (verified).
+
+3. **Rule 6 — eligibility is 25%+ of team games or the most-played spot**
+   (`public/legends.js` `meaningfulPositions`, `public/apex-roster.js`
+   `positionWork`). Replaces the v0.4 25%-or-100-games rule. A 50-game floor
+   keeps tiny cameos from counting. Falls back to share of field work when
+   team games are missing. The most-played fallback guarantees every player
+   is eligible somewhere (this is what moved Wagner back to SS).
+
+4. **Rule 8 — Close Call flag** (`public/legends.js` `draftRoster`). When the
+   top two DH candidates are within 5% on the hitting-only score, a "Close
+   call at DH" note is added to the roster overrides. (Fan-override pins are
+   a manual-roster feature; the app respects manual edits.)
+
+Rules 3 (pitchers excluded from league averages), 4 (picked together), and 7
+(bench bat uses the same hitting-only score) were already satisfied or live
+in the data pipeline.
 
 ## Changelog audit (Joe's APEX change log, v0.1-v0.7.3)
 
@@ -16,6 +49,7 @@ were real, missing, and safe:
    now counts as meaningful with 100+ games, or 50+ games making up at least
    25% of the player's field work. Replaces the old 200-game / 10% rule and
    the "most-played always counts" clause. Same definition in both modules.
+   **Superseded 2026-10-03 by DH rule 6 above.**
 
 2. **v0.4 — 2 lefty / 2 righty rotation** (`public/legends.js`
    `draftRoster`). For SP4/SP5 in the balanced strategy, a left-hander is
