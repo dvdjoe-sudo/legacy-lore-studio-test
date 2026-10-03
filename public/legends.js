@@ -522,13 +522,20 @@ const trueDH = (c) =>
         .reduce((sum, value) => sum + value, 0);
     return dh >= 300 && dh >= field * 0.5;
   })();
-const powerScore = (c) =>
-  (statNumber(c, "HR") || 0) * 4 +
-  Math.max(0, (statNumber(c, "OPSPlus") || 100) - 100) *
-    Math.sqrt(Math.max(1, statNumber(c, "PA") || 1)) *
-    0.1 +
-  Math.max(0, statNumber(c, "runsBat") || 0) * 0.5 +
-  (statNumber(c, "APEX_F") ?? statNumber(c, "APEX_R") ?? 0) * 2;
+const powerScore = (c) => {
+  // DH rule 2 (current): scored on run production only. OPS+ above average
+  // with a playing-time/longevity credit (sqrt PA), power (HR), and batting
+  // runs. No baserunning, no glove. The old APEX_F term is removed: the
+  // H-lane APEX can include baserunning, which Rule 2 excludes, and its
+  // hitting signal is already captured by OPS+ and runsBat.
+  const opsPlus = statNumber(c, "OPSPlus") || 100,
+    pa = Math.max(1, statNumber(c, "PA") || 1);
+  return (
+    (statNumber(c, "HR") || 0) * 4 +
+    Math.max(0, opsPlus - 100) * Math.sqrt(pa) * 0.1 +
+    Math.max(0, statNumber(c, "runsBat") || 0) * 0.5
+  );
+};
 
 const starterSlotKeys = () => SLOTS.slice(0, 9).map(([slot]) => slot);
 const lineupScores = (c) => {
@@ -875,6 +882,10 @@ export function addAutomaticRoleFitExplanations(roster, candidates) {
 // with the top 2-3 starters he could replace in the field. If the DH has the
 // better glove by 1+ run per 150 games, he plays the field and the other guy
 // DHs. Uses career runsDefense per 150 games as the glove rate.
+// Data guardrail: the DH must have played at least half his field games at
+// the compared position, so the career rate is a fair proxy for his glove
+// there. (Per-position defensive data lives in the data pipeline; until it
+// lands, this keeps the rule from misfiring on blended utility rates.)
 function applyDHGloveRule(roster, players) {
   const byId = new Map(players.map((c) => [c.id, c])),
     dhId = roster.slots?.DH,
@@ -891,10 +902,13 @@ function applyDHGloveRule(roster, players) {
   if (dhRate == null) return;
   const fieldPositions = ["C", "1B", "2B", "3B", "SS", "LF", "CF", "RF"],
     dhGames = dh.profile?.advancedStats?.positionGames || {},
-    // Top 3 eligible field positions by games played.
+    dhFieldTotal = fieldPositions.reduce((n, p) => n + (Number(dhGames[p]) || 0), 0),
+    // Top 3 eligible field positions by games played, requiring at least
+    // half the DH's field work came at the position.
     candidates = fieldPositions
       .filter((pos) => meaningfulPositions(dh).includes(pos))
       .map((pos) => ({ pos, games: Number(dhGames[pos]) || 0 }))
+      .filter(({ games }) => dhFieldTotal > 0 && games / dhFieldTotal >= 0.5)
       .sort((a, b) => b.games - a.games)
       .slice(0, 3);
   let bestSwap = null;

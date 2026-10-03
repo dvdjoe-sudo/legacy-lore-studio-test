@@ -34,6 +34,30 @@ Implemented the current DH rulebook:
    call at DH" note is added to the roster overrides. (Fan-override pins are
    a manual-roster feature; the app respects manual edits.)
 
+## Stat engine review (Joe asked 2026-10-03)
+
+Three issues found and fixed:
+
+1. **DH formula cleaned to match Rule 2** (`public/legends.js` `powerScore`).
+   Removed the APEX_F term: the H-lane APEX can include baserunning, which
+   Rule 2 excludes, and its hitting signal was already captured by OPS+ and
+   batting runs. The score is now purely OPS+ (with longevity credit), power
+   (HR), and batting runs. Result: 7 teams get a better pure slugger at DH,
+   all improvements (BOS Ortiz over Williams with Williams staying in LF;
+   MIN Killebrew over Yost; CLE Manny Ramirez; MIL Fielder; CHC Hack Wilson;
+   BAL Boog Powell).
+
+2. **Glove-rule data guardrail** (`public/legends.js` `applyDHGloveRule`).
+   Per-position defensive data does not exist in the app data (only career
+   runsDefense). Added a guardrail: the DH must have played at least half his
+   field games at the compared position, so the career rate is a fair proxy
+   for his glove there. True per-position defense is a data-pipeline item.
+
+3. **Lineup order audited.** The `recommendedBattingOrder` logic follows
+   standard baseball construction (speed/OBP leadoff, table-setter 2nd,
+   best all-around 3rd, power cleanup 4th-5th, then by offense). No changes
+   needed; it now uses the cleaned DH formula for its power component.
+
 Rules 3 (pitchers excluded from league averages), 4 (picked together), and 7
 (bench bat uses the same hitting-only score) were already satisfied or live
 in the data pipeline.
