@@ -58,6 +58,26 @@ Three issues found and fixed:
    best all-around 3rd, power cleanup 4th-5th, then by offense). No changes
    needed; it now uses the cleaned DH formula for its power component.
 
+## Bullpen and bench rework (Joe asked 2026-10-03)
+
+1. **LR is now the emergency starter** (`public/legends.js` `draftRoster`).
+   The long-relief slot prefers a swingman (SP+RP eligible), then any
+   starter with the stamina for long relief, before falling back to pure
+   relievers. A 26-man roster rarely has seven quality dedicated bullpen
+   arms; the 7th arm should be able to spot-start. Result: 29 of 30 teams
+   now run a starter-type at LR (e.g. Smoltz ATL, Mendoza NYY, Gullett CIN).
+
+2. **UTIL prioritizes coverage breadth** (`public/legends.js`). The utility
+   pick now sorts by total positions covered (2B/3B/SS plus corners and
+   outfield), so a super-utility who covers 5-6 spots wins over a
+   2-position guy. Frees the rest of the bench for bats.
+
+3. **OF4 with starter-shift awareness** (`public/legends.js`). If a starting
+   corner outfielder can also play CF, the OF4 only needs corner coverage
+   (the starter shifts to CF when needed) instead of requiring a redundant
+   CF glove. Rarely triggers on all-time rosters (dedicated CFs), but the
+   logic is in place.
+
 Rules 3 (pitchers excluded from league averages), 4 (picked together), and 7
 (bench bat uses the same hitting-only score) were already satisfied or live
 in the data pipeline.

@@ -1063,14 +1063,57 @@ export function draftRoster(candidates, existing, allCandidates = candidates, st
   for (const slot of ["MR1", "MR2"])
     take(slot, (c) => relief(c) && ["middle", "setup"].includes(preference(c)));
   for (const slot of ["MR1", "MR2"]) take(slot, relief);
+  // LR is the emergency starter, not a 7th pure bullpen arm. Prefer a
+  // swingman (SP+RP eligible), then any starter with the stamina for long
+  // relief, before falling back to pure relievers. A 26-man roster rarely
+  // has seven quality dedicated bullpen arms; the long man should be able
+  // to spot-start.
+  const isSwingman = (c) => {
+    const mp = meaningfulPositions(c);
+    return mp.includes("SP") && mp.includes("RP");
+  };
+  take("LR", (c) => isSwingman(c) && ["long", "swing"].includes(preference(c)));
+  take("LR", isSwingman);
+  take("LR", (c) => meaningfulPositions(c).includes("SP"));
   take("LR", (c) => relief(c) && ["long", "swing"].includes(preference(c)));
-  take("LR", (c) => relief(c) && positions(c).includes("SP"));
   take("LR", relief);
   take("C2", (c) => meaningfulPositions(c).includes("C"));
-  take("UTIL", (c) => coverage(c, ["2B", "3B", "SS"]) >= 2);
-  take("UTIL", (c) => coverage(c, ["2B", "3B", "SS"]) >= 1);
-  take("OF4", (c) => meaningfulPositions(c).includes("CF"));
-  take("OF4", (c) => coverage(c, ["LF", "CF", "RF"]) >= 1);
+  // UTIL: prefer the player covering the most spots. A super-utility who
+  // covers middle infield plus corners and outfield frees the rest of the
+  // bench for bats. Breadth is the tiebreaker after the coverage minimum.
+  const coverageBreadth = (c) =>
+    coverage(c, ["2B", "3B", "SS", "1B", "LF", "CF", "RF"]);
+  take(
+    "UTIL",
+    (c) => coverage(c, ["2B", "3B", "SS"]) >= 2,
+    (a, b) => coverageBreadth(b) - coverageBreadth(a),
+  );
+  take(
+    "UTIL",
+    (c) => coverage(c, ["2B", "3B", "SS"]) >= 1,
+    (a, b) => coverageBreadth(b) - coverageBreadth(a),
+  );
+  // OF4: if a starting corner outfielder can also play CF, the OF4 only
+  // needs corner coverage (the starter shifts to CF when needed). This
+  // frees the spot for a better bat instead of a redundant CF glove.
+  const cornerOFShiftsToCF = ["LF", "RF"].some((slot) => {
+    const starter = players.find((c) => c.id === r.slots[slot]);
+    return starter && meaningfulPositions(starter).includes("CF");
+  });
+  if (cornerOFShiftsToCF) {
+    take(
+      "OF4",
+      (c) => coverage(c, ["LF", "RF"]) >= 1,
+      (a, b) => coverageBreadth(b) - coverageBreadth(a),
+    );
+  } else {
+    take("OF4", (c) => meaningfulPositions(c).includes("CF"));
+    take(
+      "OF4",
+      (c) => coverage(c, ["LF", "CF", "RF"]) >= 1,
+      (a, b) => coverageBreadth(b) - coverageBreadth(a),
+    );
+  }
   take("CI", (c) => coverage(c, ["1B", "3B"]) >= 1);
   take(
     "PH",
