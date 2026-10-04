@@ -30,6 +30,7 @@ import {
   eligibleForSlot,
   rosterEligibility,
   lineupOrderNote,
+  detectPositionBattles,
 } from "./legends.js";
 export function createLegendsUI({
   getBoard,
@@ -198,7 +199,11 @@ export function createLegendsUI({
       check = rosterChecks(r, b.candidates),
       next = rosterNextStep(r, b.candidates, check),
       count = Object.keys(r.slots).length,
-      progress = Math.round((count / 26) * 100);
+      progress = Math.round((count / 26) * 100),
+      // Compute battles live so saved rosters (drafted before the feature)
+      // show them without needing a fresh draft.
+      liveBattles = detectPositionBattles(r, b.candidates || []),
+      battles = { ...(r.battles || {}), ...liveBattles };
     const depth = (slots) =>
       slots
         .map(
@@ -235,7 +240,7 @@ export function createLegendsUI({
                 short = slotShortlist(b.candidates, k, "", eligibilityOptions),
                 expanded = expandedSlots.has(k),
                 shown = expanded ? eligible.length : short.length,
-                battle = r.battles?.[k],
+                battle = battles[k],
                 battleBadge = battle
                   ? `<span class="battle-badge" title="Position battle: ${esc(battle.candidates.map((x) => x.name).join(" vs "))} (gap ${battle.gapPct}%). Click Compare best fits to decide.">BATTLE</span>`
                   : "";

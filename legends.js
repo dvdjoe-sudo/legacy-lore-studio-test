@@ -1140,7 +1140,7 @@ export function draftRoster(candidates, existing, allCandidates = candidates, st
 // Detect positions where the top two candidates are close enough that the
 // user should decide. Covers premium defense spots (elite glove vs bat) and
 // any other tight race. Returns { [slot]: { candidates: [...], leaderId } }.
-function detectPositionBattles(roster, players) {
+export function detectPositionBattles(roster, players) {
   const byId = new Map(players.map((c) => [c.id, c])),
     battles = {},
     // Check premium positions plus 1B/3B/LF/RF (DH already has close-call).
