@@ -1005,6 +1005,13 @@ export function draftRoster(candidates, existing, allCandidates = candidates, st
   // has the better glove by 1+ run per 150 games, he plays the field and the
   // other guy DHs. (This is why DiMaggio plays CF and Mantle DHs.)
   applyDHGloveRule(r, players);
+  // Roster optimizer (Joe 2026-10-03): try pairwise swaps to maximize total
+  // 9-man value. Runs before rotation/bullpen/bench so the bench backfills
+  // any promoted players.
+  optimizeNineMan(r, players);
+  // Sync the used set with optimizer changes.
+  used.clear();
+  for (const id of Object.values(r.slots)) if (id) used.add(id);
   for (let i = 1; i <= 5; i++)
     take("SP" + i, (c) => meaningfulPositions(c).includes("SP"));
   // v0.4: 2 lefty / 2 righty rotation. Applied in the balanced strategy as a
@@ -1133,9 +1140,6 @@ export function draftRoster(candidates, existing, allCandidates = candidates, st
   // Position battles (Joe 2026-10-03): for premium defense positions and any
   // close call, flag when the top two are within 15%. The user picks the
   // winner; clicking the position shows the comparison.
-  // Roster optimizer (Joe 2026-10-03): try pairwise swaps to maximize total
-  // 9-man value (8 fielders + DH together, not greedy).
-  optimizeNineMan(r, players);
   r.battles = detectPositionBattles(r, players);
   return addAutomaticRoleFitExplanations(r, allCandidates);
 }
@@ -1161,11 +1165,13 @@ function optimizeNineMan(roster, players) {
     return total;
   };
   
-  // Get top 3 alternatives for a slot (excluding current 9-man).
+  // Get top 3 alternatives for a slot (excluding current 9-man only; bench
+  // players are eligible to be promoted).
+  const nineManSlots = ["C", "1B", "2B", "3B", "SS", "LF", "CF", "RF", "DH"];
   const alternatives = (slot, currentNine) => {
-    const used = new Set(Object.values(currentNine));
+    const usedNine = new Set(nineManSlots.map((s) => currentNine[s]).filter(Boolean));
     return players
-      .filter((c) => c.type === "Player" && !used.has(c.id) && meaningfulPositions(c).includes(slot))
+      .filter((c) => c.type === "Player" && !usedNine.has(c.id) && meaningfulPositions(c).includes(slot))
       .map((c) => ({ c, score: Number(rosterMetric(c, slot)?.value) || 0 }))
       .sort((a, b) => b.score - a.score)
       .slice(0, 3)
@@ -1196,6 +1202,12 @@ function optimizeNineMan(roster, players) {
         const trialValue = nineManValue(trial);
         
         if (trialValue > currentValue * 1.01) { // 1% improvement threshold.
+          // If the alternative was on the bench, clear that bench slot.
+          for (const [s, id] of Object.entries(roster.slots)) {
+            if (id === alt.id && !nineManSlots.includes(s)) {
+              delete roster.slots[s];
+            }
+          }
           roster.slots[slot] = alt.id;
           roster.slots.DH = trial.DH;
           improved = true;
