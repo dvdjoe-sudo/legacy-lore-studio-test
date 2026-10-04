@@ -3,6 +3,9 @@ import {
   dataConfidenceGrade,
   rosterMetric,
   rosterModule,
+  PREMIUM_DEFENSE_POSITIONS,
+  premiumPositionScore,
+  defenseRate150,
 } from "./apex-roster.js";
 import {
   retrosheetPitchingWork,
@@ -1127,7 +1130,63 @@ export function draftRoster(candidates, existing, allCandidates = candidates, st
     defaultOrder.every((slot) => Boolean(r.slots[slot]))
   )
     r.order = recommendedBattingOrder(r, allCandidates);
+  // Position battles (Joe 2026-10-03): for premium defense positions and any
+  // close call, flag when the top two are within 15%. The user picks the
+  // winner; clicking the position shows the comparison.
+  r.battles = detectPositionBattles(r, players);
   return addAutomaticRoleFitExplanations(r, allCandidates);
+}
+
+// Detect positions where the top two candidates are close enough that the
+// user should decide. Covers premium defense spots (elite glove vs bat) and
+// any other tight race. Returns { [slot]: { candidates: [...], leaderId } }.
+function detectPositionBattles(roster, players) {
+  const byId = new Map(players.map((c) => [c.id, c])),
+    battles = {},
+    // Check premium positions plus 1B/3B/LF/RF (DH already has close-call).
+    checkSlots = [...PREMIUM_DEFENSE_POSITIONS, "1B", "3B", "LF", "RF"];
+  for (const slot of checkSlots) {
+    const starterId = roster.slots?.[slot];
+    if (!starterId) continue;
+    const starter = byId.get(starterId);
+    if (!starter) continue;
+    // Top 3 by the slot's metric, including the starter.
+    const usedOthers = new Set(
+      Object.values(roster.slots || {}).filter((id) => id !== starterId),
+    );
+    const ranked = players
+      .filter(
+        (c) =>
+          c.type === "Player" &&
+          !usedOthers.has(c.id) &&
+          meaningfulPositions(c).includes(slot),
+      )
+      .map((c) => ({
+        c,
+        score: Number(rosterMetric(c, slot)?.value) || 0,
+        defense: Math.round(defenseRate150(c) * 10) / 10,
+        opsPlus: Number(c.profile?.advancedStats?.OPSPlus) || 0,
+      }))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 3);
+    if (ranked.length < 2 || ranked[0].score <= 0) continue;
+    const gap = (ranked[0].score - ranked[1].score) / ranked[0].score;
+    // 15% threshold: flags genuine toss-ups like Mazeroski/Ritchey.
+    if (gap < 0.15) {
+      battles[slot] = {
+        leaderId: ranked[0].c.id,
+        gapPct: Math.round(gap * 1000) / 10,
+        candidates: ranked.map(({ c, score, defense, opsPlus }) => ({
+          id: c.id,
+          name: c.name,
+          score: Math.round(score * 10) / 10,
+          defense,
+          opsPlus: Math.round(opsPlus),
+        })),
+      };
+    }
+  }
+  return battles;
 }
 export function assignSlot(roster, slot, id) {
   const r = structuredClone(roster);

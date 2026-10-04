@@ -303,16 +303,39 @@ function bestPositionMetric(candidate, positions) {
   return choices[0] || null;
 }
 
+export const PREMIUM_DEFENSE_POSITIONS = ["C", "2B", "SS", "CF"];
+
+// Defense rate: career runsDefense per 150 games. Used to blend defense into
+// premium position picks (C/2B/SS/CF) per Joe 2026-10-03.
+export function defenseRate150(candidate) {
+  const stats = advanced(candidate);
+  const rd = Number(stats?.runsDefense), g = Number(stats?.G);
+  if (!Number.isFinite(rd) || !Number.isFinite(g) || g <= 0) return 0;
+  return (rd / g) * 150;
+}
+
+// Premium positions blend hitting (H-lane) with defense. Joe 2026-10-03:
+// defense matters more at C/2B/SS/CF.
+export function premiumPositionScore(candidate) {
+  const h = franchiseApex(candidate, "H")?.value || 0;
+  return h + defenseRate150(candidate) * 0.5;
+}
+
 export function rosterMetric(candidate, slot) {
   if (/^SP\d+$/.test(slot)) return rosterPosition(candidate, "SP");
   if (["CL", "SU1", "SU2", "MR1", "MR2", "LHS", "LR"].includes(slot))
     return rosterPosition(candidate, "RP") || rosterPosition(candidate, "SP");
-  // Field positions draft on overall franchise hitting value (H-lane), not
-  // the position-specific slice. The slice penalizes great hitters who split
-  // time (Stargell 1B/LF) and rewards mediocre full-timers (Fletcher).
+  // Premium defense positions (C/2B/SS/CF) blend hitting with defense.
+  // Other field positions draft on overall franchise hitting value (H-lane),
+  // not the position-specific slice. The slice penalizes great hitters who
+  // split time (Stargell 1B/LF) and rewards mediocre full-timers (Fletcher).
   // Eligibility (Rule 6) already ensures meaningful experience at the
   // position; among the eligible, the best hitter plays. (Same principle as
   // the DH fix. rosterPosition keeps the slice for display.)
+  if (PREMIUM_DEFENSE_POSITIONS.includes(slot)) {
+    const value = premiumPositionScore(candidate);
+    return { label: "APEX-H + Defense", value, detail: "Hitting + defense blend" };
+  }
   if (FIELD_POSITIONS.includes(slot)) return franchiseApex(candidate, "H");
   if (slot === "C2") return rosterPosition(candidate, "C");
   if (slot === "UTIL") {
@@ -327,7 +350,7 @@ export function rosterMetric(candidate, slot) {
     // DH is a pure batting role: the vestigial DH position slice (usually ~0)
     // misleads both the dropdown display and override comparisons, so the
     // slot always compares on overall franchise hitting value. The draft
-    // itself still prefers a true DH first, then the best power bat.
+    // picks the best hitter by run production (no true-DH preference).
     return franchiseApex(candidate, "H");
   }
   if (slot === "PH") return franchiseApex(candidate, "H");

@@ -234,8 +234,12 @@ export function createLegendsUI({
                 eligible = slotCandidates(b.candidates, k, "", eligibilityOptions),
                 short = slotShortlist(b.candidates, k, "", eligibilityOptions),
                 expanded = expandedSlots.has(k),
-                shown = expanded ? eligible.length : short.length;
-              return `<div class="roster-slot-wrap ${next.slot === k ? "guided-next" : ""}"><div class="roster-slot"><span class="position-chip">${k}</span><div><label for="slot-${k}">${label} <small>${shown} of ${eligible.length} choices</small></label><select id="slot-${k}" data-slot="${k}"><option value="">Choose an eligible player</option>${playerOptions(b, r, k, expanded)}</select><div class="slot-tools">${!expanded && eligible.length > short.length ? `<button type="button" data-slot-all="${k}">Show all ${eligible.length}</button>` : ""}<button type="button" data-slot-compare="${k}" ${eligible.length < 2 ? "disabled" : ""}>Compare best fits</button></div></div>${c ? `<button class="icon-button" data-roster-edit="${esc(c.id)}" aria-label="View ${esc(c.name)} stats">↗</button>` : ""}</div>${rosterFitHTML(b, r, k, c)}</div>`;
+                shown = expanded ? eligible.length : short.length,
+                battle = r.battles?.[k],
+                battleBadge = battle
+                  ? `<span class="battle-badge" title="Position battle: ${esc(battle.candidates.map((x) => x.name).join(" vs "))} (gap ${battle.gapPct}%). Click Compare best fits to decide.">BATTLE</span>`
+                  : "";
+              return `<div class="roster-slot-wrap ${next.slot === k ? "guided-next" : ""} ${battle ? "has-battle" : ""}"><div class="roster-slot"><span class="position-chip">${k}${battleBadge}</span><div><label for="slot-${k}">${label} <small>${shown} of ${eligible.length} choices</small></label><select id="slot-${k}" data-slot="${k}"><option value="">Choose an eligible player</option>${playerOptions(b, r, k, expanded)}</select><div class="slot-tools">${!expanded && eligible.length > short.length ? `<button type="button" data-slot-all="${k}">Show all ${eligible.length}</button>` : ""}<button type="button" data-slot-compare="${k}" ${eligible.length < 2 ? "disabled" : ""}>Compare best fits</button></div></div>${c ? `<button class="icon-button" data-roster-edit="${esc(c.id)}" aria-label="View ${esc(c.name)} stats">↗</button>` : ""}</div>${rosterFitHTML(b, r, k, c)}</div>`;
             })
             .join("")}</section>`,
       )
