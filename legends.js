@@ -1133,8 +1133,78 @@ export function draftRoster(candidates, existing, allCandidates = candidates, st
   // Position battles (Joe 2026-10-03): for premium defense positions and any
   // close call, flag when the top two are within 15%. The user picks the
   // winner; clicking the position shows the comparison.
+  // Roster optimizer (Joe 2026-10-03): try pairwise swaps to maximize total
+  // 9-man value (8 fielders + DH together, not greedy).
+  optimizeNineMan(r, players);
   r.battles = detectPositionBattles(r, players);
   return addAutomaticRoleFitExplanations(r, allCandidates);
+}
+
+// Optimize the starting nine as a unit. The greedy draft picks each position
+// independently; this tries swapping each fielder with top alternatives and
+// re-picking the DH, keeping the configuration with the highest total value.
+// This catches cases like Stargell-1B opening DH for Kiner.
+function optimizeNineMan(roster, players) {
+  const byId = new Map(players.map((c) => [c.id, c]));
+  const fieldSlots = ["C", "1B", "2B", "3B", "SS", "LF", "CF", "RF"];
+  
+  // Value of the 9-man: fielders by rosterMetric, DH by powerScore.
+  const nineManValue = (slots) => {
+    let total = 0;
+    for (const s of fieldSlots) {
+      const c = byId.get(slots[s]);
+      if (!c) continue;
+      total += Number(rosterMetric(c, s)?.value) || 0;
+    }
+    const dh = byId.get(slots.DH);
+    if (dh) total += powerScore(dh) / 10; // Scale to match fielder magnitudes.
+    return total;
+  };
+  
+  // Get top 3 alternatives for a slot (excluding current 9-man).
+  const alternatives = (slot, currentNine) => {
+    const used = new Set(Object.values(currentNine));
+    return players
+      .filter((c) => c.type === "Player" && !used.has(c.id) && meaningfulPositions(c).includes(slot))
+      .map((c) => ({ c, score: Number(rosterMetric(c, slot)?.value) || 0 }))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 3)
+      .map((x) => x.c);
+  };
+  
+  // Re-pick DH from players not in the 9-man.
+  const repickDH = (slots) => {
+    const used = new Set(fieldSlots.map((s) => slots[s]).filter(Boolean));
+    const dhPool = players.filter((c) => c.type === "Player" && !used.has(c.id));
+    if (!dhPool.length) return slots.DH;
+    return dhPool.sort((a, b) => powerScore(b) - powerScore(a))[0].id;
+  };
+  
+  let improved = true, iterations = 0;
+  while (improved && iterations < 3) {
+    improved = false;
+    iterations++;
+    const currentValue = nineManValue(roster.slots);
+    
+    for (const slot of fieldSlots) {
+      const currentNine = { ...roster.slots };
+      const alts = alternatives(slot, currentNine);
+      
+      for (const alt of alts) {
+        const trial = { ...roster.slots, [slot]: alt.id };
+        trial.DH = repickDH(trial);
+        const trialValue = nineManValue(trial);
+        
+        if (trialValue > currentValue * 1.01) { // 1% improvement threshold.
+          roster.slots[slot] = alt.id;
+          roster.slots.DH = trial.DH;
+          improved = true;
+          break;
+        }
+      }
+      if (improved) break;
+    }
+  }
 }
 
 // Detect positions where the top two candidates are close enough that the
