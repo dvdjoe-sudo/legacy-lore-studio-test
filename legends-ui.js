@@ -193,6 +193,47 @@ export function createLegendsUI({
         }),
     );
   };
+  // Field diagram (Joe 2026-10-03): SVG baseball diamond showing the starting
+  // nine at their positions, like the Clubhouse view. Battle positions get a
+  // red indicator.
+  function fieldDiagramHTML(r, battles) {
+    const pos = {
+      // [x, y] in a 400x400 viewBox, catcher's perspective.
+      P: [200, 250], C: [200, 355], "1B": [285, 270], "2B": [235, 200],
+      "3B": [115, 270], SS: [165, 200], LF: [70, 110], CF: [200, 60],
+      RF: [330, 110], DH: [340, 355],
+    };
+    const fieldSlots = ["C", "1B", "2B", "3B", "SS", "LF", "CF", "RF", "DH"];
+    const markers = fieldSlots
+      .map((slot) => {
+        const c = candidate(r.slots[slot]);
+        const [x, y] = pos[slot];
+        const battle = battles[slot];
+        const name = c ? c.name : "Open";
+        // Split long names for display.
+        const displayName = name.length > 16 ? name.split(" ").slice(-1)[0] : name;
+        const apex = c ? c.profile?.apex?.F ?? c.profile?.board?.Apex : null;
+        const apexStr = apex != null ? `${Math.round(apex * 10) / 10} W` : "";
+        return `<g class="field-pos ${battle ? "field-battle" : ""}" data-field-slot="${slot}">
+          <circle cx="${x}" cy="${y}" r="26" class="field-marker-bg"/>
+          ${battle ? `<circle cx="${x + 18}" cy="${y - 18}" r="8" class="field-battle-dot"/><text x="${x + 18}" y="${y - 14}" class="field-battle-text">!</text>` : ""}
+          <text x="${x}" y="${y - 8}" class="field-pos-label">${slot}</text>
+          <text x="${x}" y="${y + 6}" class="field-player-name">${esc(displayName)}</text>
+          <text x="${x}" y="${y + 18}" class="field-player-apex">${esc(apexStr)}</text>
+        </g>`;
+      })
+      .join("");
+    return `<section class="field-diagram-wrap"><h3>On the field</h3>
+      <svg viewBox="0 0 400 400" class="field-diagram" role="img" aria-label="Starting nine field diagram">
+        <ellipse cx="200" cy="200" rx="185" ry="175" class="field-grass"/>
+        <polygon points="200,330 285,245 200,160 115,245" class="field-infield"/>
+        <circle cx="200" cy="245" r="12" class="field-mound"/>
+        <rect x="192" y="322" width="16" height="12" class="field-home"/>
+        ${markers}
+      </svg>
+      <p class="help">Click a position to compare candidates. Red ! marks a position battle.</p>
+    </section>`;
+  }
   function renderRoster() {
     const b = getBoard(),
       r = roster(),
@@ -222,7 +263,7 @@ export function createLegendsUI({
           `<option value="${esc(c.id)}" ${r.legacyException?.playerId === c.id ? "selected" : ""}>${esc(c.name)}</option>`,
       )
       .join("");
-    return `<section class="workspace legends-roster"><div class="section-heading"><div><div class="eyebrow muted">YOUR FRANCHISE. EVERY ERA.</div><h2>All-time roster</h2></div><div class="board-actions"><button class="subtle" id="clear-roster">Start over</button><button class="subtle" id="draft-roster" ${r.strategy === "custom" ? "disabled" : ""}>Fill open roles</button><button class="primary" id="export-lineup">Download lineup card</button></div></div><p class="section-description">${count} / 26 players · Nine starters, a five-man rotation, seven defined bullpen jobs, and a five-player coverage bench. Position menus enforce franchise tenure, workload and meaningful experience.</p><section class="roster-progress state-${esc(next.state)}"><div><span>${count} OF 26 ROLES FILLED</span><strong>${esc(next.text)}</strong></div><progress value="${count}" max="26" aria-label="${count} of 26 roster roles filled">${progress}%</progress><b>${progress}%</b></section><section class="roster-module-intro"><div><span>APEX 2.2 TEST</span><strong>Franchise Roster Module</strong><small>${esc(APEX_ROSTER_MODULE_VERSION)}</small></div><p><b>Franchise APEX</b> ranks performance. <b>RosterPos</b>, <b>APEX-V</b>, <b>APEX-C</b>, confidence, October and pitcher roles explain how the player fits. Complete APEX-Oct evidence may adjust APEX-F; missing evidence stays N/A.</p></section><div class="roster-strategy"><label>Roster builder<select id="roster-strategy"><option value="balanced" ${r.strategy === "balanced" ? "selected" : ""}>Balanced MLB-style roster</option><option value="apex" ${r.strategy === "apex" ? "selected" : ""}>Best position-earned APEX by role</option><option value="custom" ${r.strategy === "custom" ? "selected" : ""}>Fully manual</option></select></label><p>${r.strategy === "apex" ? "Fills each legal job using position-earned or role-lane APEX. Companions break roster-fit decisions without changing position or role eligibility." : r.strategy === "custom" ? "No automatic selections. Every roster choice stays in your hands; lower-score choices can carry a saved explanation." : "Prioritizes real lineup coverage, a true closer, setup and middle relief, one left-handed specialist, a swingman and a functional bench."}</p></div>${rosterRulesHTML(r, b.candidates, esc)}<section class="legacy-exception"><div><span>OPTIONAL</span><strong>Legacy Legend exception</strong><p>One player may miss only the workload minimum. Three franchise seasons and real experience at the selected position are still required.</p></div><label>Player<select id="legacy-exception-player"><option value="">No exception</option>${exceptionOptions}</select></label><label>Why this legend belongs<textarea id="legacy-exception-reason" maxlength="2000" rows="2" placeholder="Franchise meaning, era context, specialist value…">${esc(r.legacyException?.reason || "")}</textarea></label></section><div class="roster-layout"><div class="roster-editor"><div class="roster-title-fields"><label>Card title<input id="roster-title" maxlength="150" value="${esc(r.title)}"></label><label>Manager<select id="roster-manager"><option value="">Choose a manager</option>${managerOptions(b, r)}</select></label></div>${[
+    return `<section class="workspace legends-roster"><div class="section-heading"><div><div class="eyebrow muted">YOUR FRANCHISE. EVERY ERA.</div><h2>All-time roster</h2></div><div class="board-actions"><button class="subtle" id="clear-roster">Start over</button><button class="subtle" id="draft-roster" ${r.strategy === "custom" ? "disabled" : ""}>Fill open roles</button><button class="primary" id="export-lineup">Download lineup card</button></div></div><p class="section-description">${count} / 26 players · Nine starters, a five-man rotation, seven defined bullpen jobs, and a five-player coverage bench. Position menus enforce franchise tenure, workload and meaningful experience.</p><section class="roster-progress state-${esc(next.state)}"><div><span>${count} OF 26 ROLES FILLED</span><strong>${esc(next.text)}</strong></div><progress value="${count}" max="26" aria-label="${count} of 26 roster roles filled">${progress}%</progress><b>${progress}%</b></section><section class="roster-module-intro"><div><span>APEX 2.2 TEST</span><strong>Franchise Roster Module</strong><small>${esc(APEX_ROSTER_MODULE_VERSION)}</small></div><p><b>Franchise APEX</b> ranks performance. <b>RosterPos</b>, <b>APEX-V</b>, <b>APEX-C</b>, confidence, October and pitcher roles explain how the player fits. Complete APEX-Oct evidence may adjust APEX-F; missing evidence stays N/A.</p></section><div class="roster-strategy"><label>Roster builder<select id="roster-strategy"><option value="balanced" ${r.strategy === "balanced" ? "selected" : ""}>Balanced MLB-style roster</option><option value="apex" ${r.strategy === "apex" ? "selected" : ""}>Best position-earned APEX by role</option><option value="custom" ${r.strategy === "custom" ? "selected" : ""}>Fully manual</option></select></label><p>${r.strategy === "apex" ? "Fills each legal job using position-earned or role-lane APEX. Companions break roster-fit decisions without changing position or role eligibility." : r.strategy === "custom" ? "No automatic selections. Every roster choice stays in your hands; lower-score choices can carry a saved explanation." : "Prioritizes real lineup coverage, a true closer, setup and middle relief, one left-handed specialist, a swingman and a functional bench."}</p></div>${rosterRulesHTML(r, b.candidates, esc)}<section class="legacy-exception"><div><span>OPTIONAL</span><strong>Legacy Legend exception</strong><p>One player may miss only the workload minimum. Three franchise seasons and real experience at the selected position are still required.</p></div><label>Player<select id="legacy-exception-player"><option value="">No exception</option>${exceptionOptions}</select></label><label>Why this legend belongs<textarea id="legacy-exception-reason" maxlength="2000" rows="2" placeholder="Franchise meaning, era context, specialist value…">${esc(r.legacyException?.reason || "")}</textarea></label></section><div class="roster-layout"><div class="roster-editor"><div class="roster-title-fields"><label>Card title<input id="roster-title" maxlength="150" value="${esc(r.title)}"></label><label>Manager<select id="roster-manager"><option value="">Choose a manager</option>${managerOptions(b, r)}</select></label></div>${fieldDiagramHTML(r, battles)}${[
       ["The starting nine", SLOTS.slice(0, 9)],
       ["The rotation", SLOTS.slice(9, 14)],
       ["The bullpen", SLOTS.slice(14, 21)],
@@ -301,6 +342,11 @@ export function createLegendsUI({
     $$('[data-slot-compare]').forEach(
       (button) =>
         (button.onclick = () => openSlotCompare(button.dataset.slotCompare)),
+    );
+    // Field diagram positions open the same comparison modal.
+    $$('[data-field-slot]').forEach(
+      (el) =>
+        (el.onclick = () => openSlotCompare(el.dataset.fieldSlot)),
     );
     for (const field of ["title", "notes", "manager"])
       $("#roster-" + field).onchange = (e) => {

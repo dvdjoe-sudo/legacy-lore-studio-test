@@ -370,3 +370,18 @@ body:has(.history-hub) .overview{display:none}.history-tabs{max-width:1180px;mar
 .battle-badge{display:inline-block;margin-left:6px;padding:2px 6px;background:#b3402e;color:#fff;font-size:.62rem;font-weight:800;letter-spacing:.06em;border-radius:3px;vertical-align:middle}
 .roster-slot-wrap.has-battle .position-chip{border-color:#b3402e}
 .roster-slot-wrap.has-battle .roster-slot{border-left:3px solid #b3402e;padding-left:9px}
+.field-diagram-wrap{margin:20px 0;padding:16px;background:#f8f6ef;border:1px solid #d8d4c0;border-radius:10px}
+.field-diagram-wrap h3{font-family:Georgia,serif;font-size:1.2rem;margin:0 0 12px;color:#254b3d}
+.field-diagram{width:100%;max-width:480px;display:block;margin:0 auto}
+.field-grass{fill:#4a7c3a}
+.field-infield{fill:#c9a86a}
+.field-mound{fill:#c9a86a;stroke:#a8884f;stroke-width:2}
+.field-home{fill:#f5f5f5;stroke:#999;stroke-width:1}
+.field-marker-bg{fill:#faf2df;stroke:#254b3d;stroke-width:2;opacity:.95}
+.field-pos-label{font-size:11px;font-weight:800;fill:#254b3d;text-anchor:middle}
+.field-player-name{font-size:10px;font-weight:600;fill:#1a1a1a;text-anchor:middle}
+.field-player-apex{font-size:9px;fill:#666;text-anchor:middle}
+.field-battle-dot{fill:#b3402e}
+.field-battle-text{font-size:11px;font-weight:800;fill:#fff;text-anchor:middle}
+.field-pos{cursor:pointer}
+.field-pos:hover .field-marker-bg{stroke:#b3402e;stroke-width:3}
