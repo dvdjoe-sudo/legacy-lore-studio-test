@@ -7,6 +7,7 @@ import {
   premiumPositionScore,
   defenseRate150,
   balancedSPScore,
+  setDraftStrategy,
 } from "./apex-roster.js";
 import {
   retrosheetPitchingWork,
@@ -940,7 +941,9 @@ export function draftRoster(candidates, existing, allCandidates = candidates, st
     players = candidates.filter((c) => c.type === "Player"),
     defaultOrder = starterSlotKeys(),
     orderWasDefault = r.order.every((slot, index) => slot === defaultOrder[index]);
-  r.strategy = ["balanced", "apex", "custom"].includes(strategy) ? strategy : "balanced";
+  r.strategy = ["hitting", "balanced", "defense", "apex", "custom"].includes(strategy) ? strategy : "balanced";
+  // Set the strategy for position scoring (hitting/balanced/defense weights).
+  setDraftStrategy(r.strategy);
   const apexFor = (c, slot) => {
     const lane = /^SP\d$/.test(slot) ? "SP" : BULLPEN_SLOTS.includes(slot) ? "RP" : "H";
     const board = c.profile?.advancedStats?.apexBoards?.[lane];
@@ -1158,11 +1161,33 @@ export function draftRoster(candidates, existing, allCandidates = candidates, st
     );
   }
   take("CI", (c) => coverage(c, ["1B", "3B"]) >= 1);
-  take(
-    "PH",
-    () => true,
-    (a, b) => powerScore(b) - powerScore(a),
-  );
+  // PH/PR (Joe 2026-10-03): the 5th bench slot is power by default (PH), but
+  // if the starting nine is slow, it becomes a pinch runner (PR) instead.
+  // Speed is measured by stolen bases; PR picks the fastest non-starter.
+  {
+    const nineIds = ["C","1B","2B","3B","SS","LF","CF","RF","DH"].map((s) => r.slots[s]).filter(Boolean);
+    const nineSB = nineIds.reduce((sum, id) => {
+      const c = players.find((x) => x.id === id);
+      return sum + (Number(c?.profile?.advancedStats?.SB) || 0);
+    }, 0);
+    const avgSB = nineIds.length ? nineSB / nineIds.length : 0;
+    // If the starters average under 10 SB (slow team), go for speed.
+    if (avgSB < 10) {
+      take(
+        "PH",
+        () => true,
+        (a, b) => (Number(b.profile?.advancedStats?.SB) || 0) - (Number(a.profile?.advancedStats?.SB) || 0),
+      );
+      // Mark it as PR in the slot label.
+      if (r.slots.PH) r.slotLabels = { ...(r.slotLabels || {}), PH: "PR" };
+    } else {
+      take(
+        "PH",
+        () => true,
+        (a, b) => powerScore(b) - powerScore(a),
+      );
+    }
+  }
   if (!r.manager)
     r.manager = candidates.find((c) => c.type === "Manager / coach")?.id || "";
   if (

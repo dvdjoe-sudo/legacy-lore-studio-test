@@ -14,6 +14,11 @@ const finite = (value) =>
 const clamp = (value, low, high) => Math.max(low, Math.min(high, value));
 const advanced = (candidate) => candidate?.profile?.advancedStats || null;
 
+// Current draft strategy for position scoring. Set by draftRoster; defaults
+// to "balanced". Controls defense weighting in premiumPositionScore.
+let currentStrategy = "balanced";
+export function setDraftStrategy(s) { currentStrategy = s; }
+
 export function franchiseApex(candidate, lane = "") {
   const stats = advanced(candidate);
   if (!stats || stats.found === false) return null;
@@ -329,7 +334,10 @@ export function defenseRate150(candidate) {
 // defense matters more at C/2B/SS/CF.
 export function premiumPositionScore(candidate) {
   const h = franchiseApex(candidate, "H")?.value || 0;
-  return h + defenseRate150(candidate) * 0.5;
+  // Defense weight by strategy (Joe 2026-10-03):
+  // hitting = 0 (pure bats), balanced = 0.5, defense = 1.0 (glove-first).
+  const w = currentStrategy === "hitting" ? 0 : currentStrategy === "defense" ? 1.0 : 0.5;
+  return h + defenseRate150(candidate) * w;
 }
 
 export function rosterMetric(candidate, slot) {
