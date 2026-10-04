@@ -38,6 +38,17 @@ export function franchiseApex(candidate, lane = "") {
   };
 }
 
+// Workload-balanced SP score (Joe 2026-10-03): modern pitchers throw far fewer
+// innings than dead-ball era aces. For rotation sorting, weight peak and
+// prime more heavily and de-emphasize career longevity, so a dominant 7-year
+// run (Sale) isn't buried by a 20-year compiler (Lyons).
+export function balancedSPScore(candidate) {
+  const apex = franchiseApex(candidate, "SP");
+  if (!apex) return 0;
+  const peak = apex.Peak3 || 0, prime = apex.Prime5 || 0, career = apex.Career || 0;
+  return peak * 0.5 + prime * 0.35 + career * 0.15;
+}
+
 export function rosterPosition(candidate, position) {
   const stats = advanced(candidate);
   if (!stats) return null;

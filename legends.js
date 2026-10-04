@@ -6,6 +6,7 @@ import {
   PREMIUM_DEFENSE_POSITIONS,
   premiumPositionScore,
   defenseRate150,
+  balancedSPScore,
 } from "./apex-roster.js";
 import {
   retrosheetPitchingWork,
@@ -1038,8 +1039,13 @@ export function draftRoster(candidates, existing, allCandidates = candidates, st
   // Sync the used set with optimizer changes.
   used.clear();
   for (const id of Object.values(r.slots)) if (id) used.add(id);
+  // Rotation uses workload-balanced SP score (Joe 2026-10-03), not raw APEX-SP.
   for (let i = 1; i <= 5; i++)
-    take("SP" + i, (c) => meaningfulPositions(c).includes("SP"));
+    take(
+      "SP" + i,
+      (c) => meaningfulPositions(c).includes("SP"),
+      (a, b) => balancedSPScore(b) - balancedSPScore(a),
+    );
   // v0.4: 2 lefty / 2 righty rotation. Applied in the balanced strategy as a
   // preference, not a mandate: a lefty is preferred for SP4/SP5 only when
   // within 25% of the best available arm, so balance never forces a clearly
@@ -1055,7 +1061,8 @@ export function draftRoster(candidates, existing, allCandidates = candidates, st
       if (!occupant || isLefty(occupant) || rotationLefties() >= 2) continue;
       // Guardrail compares against the arm already slotted, not the best
       // remaining arm, so balance never displaces a clearly superior starter.
-      const metric = (c) => rosterMetric(c, slot)?.value ?? -Infinity,
+      // Uses balancedSPScore (Joe 2026-10-03) for era-neutral comparison.
+      const metric = (c) => balancedSPScore(c),
         floor = 0.75 * metric(occupant),
         leftyPick = players
           .filter(
