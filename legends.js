@@ -1009,6 +1009,32 @@ export function draftRoster(candidates, existing, allCandidates = candidates, st
   // 9-man value. Runs before rotation/bullpen/bench so the bench backfills
   // any promoted players.
   optimizeNineMan(r, players);
+  // Position priority (Joe 2026-10-03): if the DH is clearly the best fielder
+  // at one of his eligible positions, he plays the field. Prevents stashing
+  // an elite 1B at DH.
+  {
+    const byId = new Map(players.map((c) => [c.id, c]));
+    const dh = byId.get(r.slots.DH);
+    if (dh) {
+      for (const slot of ["C", "1B", "2B", "3B", "SS", "LF", "CF", "RF"]) {
+        if (!meaningfulPositions(dh).includes(slot)) continue;
+        const cur = byId.get(r.slots[slot]);
+        if (!cur || cur.id === dh.id) continue;
+        const dhF = Number(rosterMetric(dh, slot)?.value) || 0;
+        const curF = Number(rosterMetric(cur, slot)?.value) || 0;
+        if (dhF > curF * 1.1) {
+          r.slots[slot] = dh.id;
+          const usedNine = new Set(
+            ["C","1B","2B","3B","SS","LF","CF","RF"].map((s) => r.slots[s]).filter(Boolean)
+          );
+          const pool = players.filter((c) => c.type === "Player" && !usedNine.has(c.id));
+          pool.sort((a, b) => powerScore(b) - powerScore(a));
+          r.slots.DH = pool[0]?.id || dh.id;
+          break;
+        }
+      }
+    }
+  }
   // Sync the used set with optimizer changes.
   used.clear();
   for (const id of Object.values(r.slots)) if (id) used.add(id);
@@ -1217,6 +1243,10 @@ function optimizeNineMan(roster, players) {
       if (improved) break;
     }
   }
+  // Position priority (Joe 2026-10-03): if the DH is also the best fielder at
+  // a position he's eligible for, he plays the field. DH goes to the next
+  // best bat. Prevents the optimizer from stashing an elite 1B at DH.
+  // (Implemented inline in draftRoster where powerScore is in scope.)
 }
 
 // Detect positions where the top two candidates are close enough that the
