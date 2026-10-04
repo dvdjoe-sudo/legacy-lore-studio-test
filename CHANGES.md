@@ -78,6 +78,22 @@ Three issues found and fixed:
    CF glove. Rarely triggers on all-time rosters (dedicated CFs), but the
    logic is in place.
 
+## Roster-fit: best hitter plays the position (Joe asked 2026-10-03)
+
+**Problem:** Field positions were drafted on position-specific APEX (the
+positionBoards slice), which penalizes great hitters who split time. Pirates
+1B went to Elbie Fletcher (19.6 at 1B) over Willie Stargell (8.1 at 1B on the
+slice, but 38.3 overall). Joe's call: Stargell at 1B, Kiner at DH is the
+better win-rate roster.
+
+**Fix:** `rosterMetric` (`public/apex-roster.js`) now sorts field-position
+drafts on overall Franchise APEX-H, not the position slice. Eligibility
+(Rule 6) already ensures meaningful experience at the position; among the
+eligible, the best hitter plays. (Same principle as the DH slice fix.
+`rosterPosition` keeps the slice for display.) Result: PIT now drafts
+Stargell at 1B automatically. All 30 teams' 1B picks verified sensible
+(e.g. CHC Banks over Anson).
+
 Rules 3 (pitchers excluded from league averages), 4 (picked together), and 7
 (bench bat uses the same hitting-only score) were already satisfied or live
 in the data pipeline.

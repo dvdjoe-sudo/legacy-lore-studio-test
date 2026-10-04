@@ -307,7 +307,13 @@ export function rosterMetric(candidate, slot) {
   if (/^SP\d+$/.test(slot)) return rosterPosition(candidate, "SP");
   if (["CL", "SU1", "SU2", "MR1", "MR2", "LHS", "LR"].includes(slot))
     return rosterPosition(candidate, "RP") || rosterPosition(candidate, "SP");
-  if (FIELD_POSITIONS.includes(slot)) return rosterPosition(candidate, slot);
+  // Field positions draft on overall franchise hitting value (H-lane), not
+  // the position-specific slice. The slice penalizes great hitters who split
+  // time (Stargell 1B/LF) and rewards mediocre full-timers (Fletcher).
+  // Eligibility (Rule 6) already ensures meaningful experience at the
+  // position; among the eligible, the best hitter plays. (Same principle as
+  // the DH fix. rosterPosition keeps the slice for display.)
+  if (FIELD_POSITIONS.includes(slot)) return franchiseApex(candidate, "H");
   if (slot === "C2") return rosterPosition(candidate, "C");
   if (slot === "UTIL") {
     const versatility = versatilityCompanion(candidate);
